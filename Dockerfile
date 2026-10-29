@@ -145,14 +145,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-18 main" \
         > /etc/apt/sources.list.d/llvm.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends clang-18 \
+    && apt-get install -y --no-install-recommends clang-18 libclang-rt-18-dev \
     && ln -sf /usr/bin/clang-18 /usr/bin/clang \
     && ln -sf /usr/bin/clang++-18 /usr/bin/clang++ \
     && rm -rf /var/lib/apt/lists/*
 
 ARG BAZELISK_VERSION
+ARG TARGETARCH
 RUN curl -fsSL -o /usr/local/bin/bazel \
-        "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-amd64" \
+        "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-${TARGETARCH}" \
     && chmod +x /usr/local/bin/bazel
 
 WORKDIR /src
@@ -181,7 +182,7 @@ COPY scripts/patch_googlesql_source_checkout.sh ./scripts/patch_googlesql_source
 #
 #   * If `GOOGLESQL_PREBUILT_URL` + `GOOGLESQL_PREBUILT_SHA256` are
 #     set, fetch + verify (SHA gate) + unpack into
-#     `/src/.cache/googlesql-prebuilt/googlesql_prebuilt_linux_amd64/`,
+#     `/src/.cache/googlesql-prebuilt/googlesql_prebuilt_linux_<arch>/`,
 #     where `--override_module=googlesql=.cache/googlesql-prebuilt/...`
 #     from `.bazelrc` resolves under `--config=googlesql-prebuilt`
 #     (the path is workspace-root-relative; Bazel resolves it against
@@ -231,30 +232,30 @@ RUN set -eux; \
         unpack="$tmp/unpack"; \
         mkdir -p "$unpack"; \
         tar -xzf "$tarball" -C "$unpack"; \
-        if [ ! -d "$unpack/googlesql_prebuilt_linux_amd64" ]; then \
-            echo "tarball missing top-level googlesql_prebuilt_linux_amd64/" >&2; \
+        if [ ! -d "$unpack/googlesql_prebuilt_linux_${TARGETARCH}" ]; then \
+            echo "tarball missing top-level googlesql_prebuilt_linux_${TARGETARCH}/" >&2; \
             ls -la "$unpack" >&2; \
             exit 1; \
         fi; \
-        mod_name="$(grep -E '^[[:space:]]*name = ' "$unpack/googlesql_prebuilt_linux_amd64/MODULE.bazel" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"; \
+        mod_name="$(grep -E '^[[:space:]]*name = ' "$unpack/googlesql_prebuilt_linux_${TARGETARCH}/MODULE.bazel" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"; \
         if [ "$mod_name" != "googlesql" ]; then \
             echo "prebuilt MODULE.bazel declares module(name = \"$mod_name\"); expected \"googlesql\"" >&2; \
             exit 1; \
         fi; \
-        rm -rf "$cache_root/googlesql_prebuilt_linux_amd64"; \
-        mv "$unpack/googlesql_prebuilt_linux_amd64" "$cache_root/googlesql_prebuilt_linux_amd64"; \
-        echo "${GOOGLESQL_PREBUILT_SHA256}  artifact.tar.gz" > "$cache_root/googlesql_prebuilt_linux_amd64.tarball.sha256"; \
+        rm -rf "$cache_root/googlesql_prebuilt_linux_${TARGETARCH}"; \
+        mv "$unpack/googlesql_prebuilt_linux_${TARGETARCH}" "$cache_root/googlesql_prebuilt_linux_${TARGETARCH}"; \
+        echo "${GOOGLESQL_PREBUILT_SHA256}  artifact.tar.gz" > "$cache_root/googlesql_prebuilt_linux_${TARGETARCH}.tarball.sha256"; \
         rm -rf "$tmp"; \
         # Centralized safety-gate validator — schema, identity,
         # platform, payload SHA, wrapper-presence gates. Anything
         # failing here is a hard error: the Dockerfile refuses to
         # proceed to the bazel build with a partially-valid cache.
         python3 tools/googlesql-prebuilt/validate_artifact.py \
-            --repo-root "$cache_root/googlesql_prebuilt_linux_amd64" \
+            --repo-root "$cache_root/googlesql_prebuilt_linux_${TARGETARCH}" \
             --summary-line \
             --summary-json /tmp/googlesql-validate.json; \
-        artifact_version="$(python3 -c 'import json; print(json.load(open("'"$cache_root"'/googlesql_prebuilt_linux_amd64/manifest.json")).get("artifact_version","?"))' 2>/dev/null || echo '?')"; \
-        gs_commit="$(python3 -c 'import json; print(json.load(open("'"$cache_root"'/googlesql_prebuilt_linux_amd64/manifest.json")).get("googlesql",{}).get("commit","?")[:12])' 2>/dev/null || echo '?')"; \
+        artifact_version="$(python3 -c 'import json; print(json.load(open("'"$cache_root/googlesql_prebuilt_linux_${TARGETARCH}"'/manifest.json")).get("artifact_version","?"))' 2>/dev/null || echo '?')"; \
+        gs_commit="$(python3 -c 'import json; print(json.load(open("'"$cache_root/googlesql_prebuilt_linux_${TARGETARCH}"'/manifest.json")).get("googlesql",{}).get("commit","?")[:12])' 2>/dev/null || echo '?')"; \
         echo "GoogleSQL prebuilt artifact_version=$artifact_version googlesql=$gs_commit"; \
         echo prebuilt > /tmp/googlesql-mode; \
     else \
@@ -290,7 +291,7 @@ RUN --mount=type=cache,target=/root/.cache,id=bigquery-emulator-bazel-clang18 \
     : "${mem:=8192}"; \
     mode="$(cat /tmp/googlesql-mode)"; \
     case "$mode" in \
-      prebuilt) gsq_cfg=googlesql-prebuilt ;; \
+      prebuilt) if [ "${TARGETARCH}" = arm64 ]; then gsq_cfg=googlesql-prebuilt-arm64; else gsq_cfg=googlesql-prebuilt; fi ;; \
       source)   gsq_cfg=googlesql-source ;; \
       *)        echo "unknown googlesql mode '$mode'" >&2; exit 1 ;; \
     esac; \

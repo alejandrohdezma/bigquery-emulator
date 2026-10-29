@@ -43040,20 +43040,20 @@ func (s *Store) New(req SeedRequest) *Operation <span class="cov7" title="8">{
 
 // Get returns a snapshot of the operation with the given ID.
 // Returns nil when no such operation exists.
-func (s *Store) Get(id string) *Operation <span class="cov8" title="12">{
+func (s *Store) Get(id string) *Operation <span class="cov8" title="13">{
         s.mu.Lock()
         defer s.mu.Unlock()
         op, ok := s.ops[id]
         if !ok </span><span class="cov3" title="2">{
                 return nil
         }</span>
-        <span class="cov8" title="10">return cloneOperation(op)</span>
+        <span class="cov8" title="11">return cloneOperation(op)</span>
 }
 
 // MarkRunning records that the orchestrator has started processing
 // the operation. No-op (returns false) when the operation doesn't
 // exist or has already left PENDING.
-func (s *Store) MarkRunning(id string) bool <span class="cov7" title="7">{
+func (s *Store) MarkRunning(id string) bool <span class="cov6" title="7">{
         s.mu.Lock()
         defer s.mu.Unlock()
         op, ok := s.ops[id]
@@ -43100,7 +43100,7 @@ func (s *Store) MarkFailed(id, errMsg string) bool <span class="cov3" title="2">
 // The struct is small and Result is repointed (we never mutate a
 // Result after passing it through MarkResult), so a shallow copy is
 // sufficient.
-func cloneOperation(op *Operation) *Operation <span class="cov10" title="18">{
+func cloneOperation(op *Operation) *Operation <span class="cov10" title="19">{
         cp := *op
         return &amp;cp
 }</span>
@@ -48087,7 +48087,7 @@ func summarizeByFile(findings []tidyFinding, failedFiles map[string]struct{}) []
         for _, s := range byFile </span><span class="cov7" title="5">{
                 out = append(out, *s)
         }</span>
-        <span class="cov3" title="2">sort.Slice(out, func(i, j int) bool </span><span class="cov5" title="3">{ return out[i].File &lt; out[j].File }</span>)
+        <span class="cov3" title="2">sort.Slice(out, func(i, j int) bool </span><span class="cov6" title="4">{ return out[i].File &lt; out[j].File }</span>)
         <span class="cov3" title="2">return out</span>
 }
 

@@ -131,7 +131,8 @@ func (s *WriteServer) AppendRows(stream storagepb.BigQueryWrite_AppendRowsServer
 		return err
 	}
 
-	var cachedProtoDesc *descriptorpb.DescriptorProto
+	var currentStream string
+	protoDescs := map[string]*descriptorpb.DescriptorProto{}
 	for {
 		req, recvErr := stream.Recv()
 		if errors.Is(recvErr, io.EOF) {
@@ -140,7 +141,12 @@ func (s *WriteServer) AppendRows(stream storagepb.BigQueryWrite_AppendRowsServer
 		if recvErr != nil {
 			return recvErr
 		}
-		engineReq, convErr := s.publicAppendRequestToEngine(ctx, req, &cachedProtoDesc)
+		if ws := req.GetWriteStream(); ws != "" {
+			currentStream = ws
+		}
+		protoDesc := protoDescs[currentStream]
+		engineReq, convErr := s.publicAppendRequestToEngine(ctx, req, &protoDesc)
+		protoDescs[currentStream] = protoDesc
 		if convErr != nil {
 			return status.Errorf(codes.InvalidArgument, "decode AppendRows: %v", convErr)
 		}

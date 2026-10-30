@@ -318,6 +318,38 @@ TEST_F(StorageWriteGrpcTest, BufferedStreamFlushCommitsRows) {
   EXPECT_EQ(count, 5u);
 }
 
+void AddNicknameColumn(backend::storage::Storage* storage) {
+  const backend::storage::TableId table{"proj-test", "ds", "t"};
+  auto schema = storage->GetSchema(table);
+  ASSERT_TRUE(schema.ok()) << schema.status();
+  backend::schema::ColumnSchema nickname;
+  nickname.name = "nickname";
+  nickname.type = backend::schema::ColumnType::kString;
+  nickname.mode = backend::schema::ColumnMode::kNullable;
+  schema->columns.push_back(nickname);
+  ASSERT_TRUE(storage->DropTable(table).ok());
+  ASSERT_TRUE(storage->CreateTable(table, *schema).ok());
+}
+
+TEST_F(StorageWriteGrpcTest, GetWriteStreamReturnsTheDefaultStreamsLiveSchema) {
+  CreatePeopleTable();
+  v1::GetWriteStreamRequest get_req;
+  get_req.set_name("projects/proj-test/datasets/ds/tables/t/streams/_default");
+
+  ::grpc::ClientContext before_ctx;
+  v1::WriteStream before;
+  ASSERT_TRUE(stub_->GetWriteStream(&before_ctx, get_req, &before).ok());
+  EXPECT_EQ(before.schema().fields_size(), 2);
+
+  AddNicknameColumn(storage_.get());
+
+  ::grpc::ClientContext after_ctx;
+  v1::WriteStream after;
+  ASSERT_TRUE(stub_->GetWriteStream(&after_ctx, get_req, &after).ok());
+  ASSERT_EQ(after.schema().fields_size(), 3);
+  EXPECT_EQ(after.schema().fields(2).name(), "nickname");
+}
+
 }  // namespace
 }  // namespace frontend
 }  // namespace bigquery_emulator

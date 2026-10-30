@@ -178,7 +178,6 @@ class StorageWriteService final : public v1::StorageWrite::Service {
 
   struct StreamSessionSnapshot {
     backend::storage::TableId table;
-    backend::schema::TableSchema schema;
     std::optional<v1::WriteStream::Type> type;
   };
 

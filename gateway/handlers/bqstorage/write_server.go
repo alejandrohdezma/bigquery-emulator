@@ -310,5 +310,6 @@ func publicAppendResponseFromEngine(
 	out.Response = &storagepb.AppendRowsResponse_AppendResult_{
 		AppendResult: result,
 	}
+	out.UpdatedSchema = engineTableSchemaToPublic(in.GetUpdatedSchema())
 	return out
 }
